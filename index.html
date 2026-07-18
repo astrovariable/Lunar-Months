@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Four Lunar Months — an interactive orrery</title>
+<meta name="description" content="Why does the Moon have four different month lengths? Interactive animations of the synodic, sidereal, anomalistic and draconic months.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,650&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0b0e17; --panel:#121828; --panel2:#0e1320; --line:#232c44;
+    --ink:#e8ecf4; --muted:#8b93a7;
+    --gold:#f5c84c;      /* star / sidereal */
+    --sunor:#f08a3c;     /* sun / synodic */
+    --peri:#e5484d;      /* perigee / anomalistic */
+    --node:#4cc38a;      /* ascending node / draconic */
+    --teal:#2a8577;      /* ecliptic plane */
+    --blue:#5b8def;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);
+    font-family:Inter,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:880px;margin:0 auto;padding:20px 14px 60px}
+
+  header h1{font-family:Fraunces,Georgia,serif;font-weight:650;
+    font-size:clamp(26px,5vw,40px);margin:6px 0 4px;letter-spacing:.2px}
+  header h1 .accent{color:var(--gold)}
+  header p.sub{color:var(--muted);margin:0 0 18px;font-size:15px;max-width:62ch;line-height:1.5}
+
+  .tabs{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0}
+  .tabs button{background:var(--panel2);border:1px solid var(--line);color:var(--muted);
+    padding:9px 14px;border-radius:10px;font:inherit;font-weight:600;font-size:14px;
+    cursor:pointer;transition:all .15s}
+  .tabs button:hover{color:var(--ink)}
+  .tabs button.active{color:var(--ink);border-color:var(--tabc,var(--gold));
+    box-shadow:0 0 0 1px var(--tabc,var(--gold)) inset}
+  .tabs button:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+
+  .stage{background:var(--panel);border:1px solid var(--line);border-radius:16px;
+    overflow:hidden;position:relative}
+  canvas{display:block;width:100%;height:auto}
+
+  .readout{position:absolute;top:12px;left:14px;font-family:'JetBrains Mono',monospace;
+    font-weight:700;font-size:clamp(16px,3vw,22px);color:var(--ink);
+    background:rgba(10,13,22,.55);padding:4px 10px;border-radius:8px;
+    border:1px solid var(--line);pointer-events:none}
+  .readout small{display:block;font-size:10px;font-weight:500;color:var(--muted);
+    letter-spacing:.12em;text-transform:uppercase}
+
+  .ticker{position:absolute;top:12px;right:14px;display:flex;flex-direction:column;
+    gap:6px;align-items:flex-end;pointer-events:none;max-width:60%}
+  .chip{font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:500;
+    padding:5px 10px;border-radius:999px;border:1px solid;
+    background:rgba(10,13,22,.72);animation:pop .35s ease}
+  @keyframes pop{from{transform:scale(.6);opacity:0}to{transform:scale(1);opacity:1}}
+  @media (prefers-reduced-motion:reduce){.chip{animation:none}}
+
+  .deck{background:var(--panel);border:1px solid var(--line);border-radius:16px;
+    margin-top:12px;padding:14px 16px;display:grid;gap:12px}
+  .row{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  .row label{font-size:12px;color:var(--muted);font-weight:600;letter-spacing:.06em;
+    text-transform:uppercase;min-width:96px}
+  input[type=range]{flex:1;min-width:140px;accent-color:var(--gold);height:22px}
+  .btn{background:var(--panel2);border:1px solid var(--line);color:var(--ink);
+    border-radius:10px;padding:8px 16px;font:inherit;font-weight:600;cursor:pointer;
+    min-width:88px}
+  .btn:hover{border-color:var(--muted)}
+  .btn:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+  .val{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--muted);
+    min-width:120px;text-align:right}
+  #exagRow .hint{font-size:12px;color:var(--muted);width:100%;line-height:1.45}
+  #exagRow .hint b{color:var(--ink);font-weight:600}
+
+  .explain{background:var(--panel);border:1px solid var(--line);border-radius:16px;
+    margin-top:12px;padding:16px 18px;font-size:14.5px;line-height:1.65;color:#c6cdda}
+  .explain h2{font-family:Fraunces,Georgia,serif;font-weight:650;font-size:20px;
+    margin:0 0 8px;color:var(--ink)}
+  .explain .num{font-family:'JetBrains Mono',monospace;font-weight:700}
+  .k-gold{color:var(--gold)} .k-or{color:var(--sunor)} .k-red{color:#ff7b7b}
+  .k-grn{color:var(--node)} .k-teal{color:#5fd0b5}
+
+  footer{margin-top:22px;color:var(--muted);font-size:12.5px;line-height:1.6}
+  footer .lens{font-family:'JetBrains Mono',monospace}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>The Four <span class="accent">Lunar Months</span></h1>
+    <p class="sub">One Moon, four month lengths — it depends on what you measure the
+    orbit against: the stars, the Sun, the perigee, or the nodes. Drag time, morph
+    the geometry, and watch each month complete.</p>
+  </header>
+
+  <div class="tabs" role="tablist">
+    <button id="tab-synodic"  class="active" style="--tabc:var(--sunor)" onclick="setMode('synodic')">Synodic vs Sidereal</button>
+    <button id="tab-anom"     style="--tabc:var(--peri)" onclick="setMode('anom')">Anomalistic</button>
+    <button id="tab-drac"     style="--tabc:var(--node)" onclick="setMode('drac')">Draconic</button>
+  </div>
+
+  <div class="stage">
+    <canvas id="cv" width="880" height="880" aria-label="Lunar month animation"></canvas>
+    <div class="readout"><small>elapsed</small><span id="dayTxt">Day 0.0</span></div>
+    <div class="ticker" id="ticker"></div>
+  </div>
+
+  <div class="deck">
+    <div class="row">
+      <button class="btn" id="playBtn" onclick="togglePlay()">Pause</button>
+      <label for="scrub">Time</label>
+      <input type="range" id="scrub" min="0" max="66" step="0.02" value="0"
+             oninput="state.day=+this.value">
+      <span class="val" id="scrubVal">0.0 / 66 d</span>
+    </div>
+    <div class="row">
+      <label for="speed">Speed</label>
+      <input type="range" id="speed" min="0.5" max="20" step="0.5" value="6"
+             oninput="state.speed=+this.value">
+      <span class="val" id="speedVal">6 days / s</span>
+    </div>
+    <div class="row" id="exagRow">
+      <label for="exag">Geometry</label>
+      <input type="range" id="exag" min="0" max="1" step="0.01" value="1"
+             oninput="state.exag=+this.value">
+      <span class="val" id="exagVal"></span>
+      <div class="hint" id="exagHint"></div>
+    </div>
+  </div>
+
+  <div class="explain" id="explain"></div>
+
+  <footer>
+    <span class="lens">27.21 (draconic) &lt; 27.32 (sidereal ≈ tropical) &lt; 27.55 (anomalistic) &lt; 29.53 (synodic) days</span><br>
+    Month lengths are true mean values throughout; only sizes, eccentricity, inclination
+    and precession rates are adjustable for legibility. The tropical month differs from
+    the sidereal by ~7 seconds (axial precession) — no animation can show that honestly.
+    Saros: 223 synodic ≈ 242 draconic ≈ 239 anomalistic ≈ 6585.32 d.
+    <br>Space = play/pause · ← → = step ±1 day
+  </footer>
+</div>
+
+<script>
+"use strict";
+// ---------------------------------------------------------------- constants
+const P = {
+  SID: 27.321661, SYN: 29.530589, ANOM: 27.554550, DRAC: 27.212221,
+  TROP: 27.321582, YEAR: 365.256363
+};
+const DAYS_TOTAL = 66;
+const TAU = Math.PI * 2;
+// real vs exaggerated ("teaching") geometry
+const REAL = { ecc: 0.0549, incDeg: 5.145, apsD: 3232.6, nodD: 6798.4 };
+const EXAG = { ecc: 0.30,   incDeg: 15.0,  apsD: 240.0,  nodD: 300.0  };
+const lerp = (a, b, t) => a + (b - a) * t;
+
+const COL = {
+  gold:"#f5c84c", sunor:"#f08a3c", peri:"#e5484d", apo:"#5b8def",
+  node:"#4cc38a", dnode:"#f08a3c", teal:"#2a8577", ink:"#e8ecf4",
+  muted:"#6b7590", faint:"#2a3350", earth:"#4f8dff", moon:"#c9ccd4",
+  moonDark:"#3a3f4d", trail:"#8b93a7"
+};
+
+// ---------------------------------------------------------------- state
+const state = { mode:"synodic", day:0, playing:true, speed:6, exag:1 };
+
+const cv = document.getElementById("cv");
+const ctx = cv.getContext("2d");
+let W = 880, H = 880, S = 880, CX = 440, CY = 440;
+
+function fitCanvas(){
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const cssW = cv.clientWidth || 880;
+  const cssH = Math.round(cssW * (window.innerWidth < 640 ? 1.05 : 0.92));
+  cv.style.height = cssH + "px";
+  cv.width = Math.round(cssW * dpr);
+  cv.height = Math.round(cssH * dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  W = cssW; H = cssH; S = Math.min(W, H); CX = W/2; CY = H/2;
+}
+window.addEventListener("resize", fitCanvas);
+
+// ---------------------------------------------------------------- math
+function solveKepler(M, e){
+  let E = M;
+  for (let i = 0; i < 10; i++)
+    E -= (E - e*Math.sin(E) - M) / (1 - e*Math.cos(E));
+  return E;
+}
+// world (y up) -> screen
+const sx = x => CX + x;
+const sy = y => CY - y;
+
+// ---------------------------------------------------------------- drawing kit
+function circle(x, y, r, fill, stroke, lw){
+  ctx.beginPath(); ctx.arc(sx(x), sy(y), r, 0, TAU);
+  if (fill){ ctx.fillStyle = fill; ctx.fill(); }
+  if (stroke){ ctx.strokeStyle = stroke; ctx.lineWidth = lw || 1.5; ctx.stroke(); }
+}
+function line(x1, y1, x2, y2, color, lw, dash){
+  ctx.beginPath();
+  if (dash) ctx.setLineDash(dash);
+  ctx.moveTo(sx(x1), sy(y1)); ctx.lineTo(sx(x2), sy(y2));
+  ctx.strokeStyle = color; ctx.lineWidth = lw || 1.5; ctx.stroke();
+  ctx.setLineDash([]);
+}
+function label(txt, x, y, color, size, align){
+  ctx.fillStyle = color || COL.muted;
+  ctx.font = `500 ${size||12}px 'JetBrains Mono', monospace`;
+  ctx.textAlign = align || "center"; ctx.textBaseline = "middle";
+  ctx.fillText(txt, sx(x), sy(y));
+}
+function glowDot(x, y, r, color){
+  const g = ctx.createRadialGradient(sx(x), sy(y), 0, sx(x), sy(y), r*3.2);
+  g.addColorStop(0, color); g.addColorStop(1, "rgba(0,0,0,0)");
+  ctx.fillStyle = g;
+  ctx.beginPath(); ctx.arc(sx(x), sy(y), r*3.2, 0, TAU); ctx.fill();
+  circle(x, y, r, color);
+}
+// Moon dot with a lit semicircle facing sunDir (angle in world frame)
+function moonDot(x, y, r, sunDir){
+  circle(x, y, r, COL.moonDark);
+  ctx.save();
+  ctx.beginPath();
+  // lit half: semicircle whose flat edge is perpendicular to sunDir
+  // canvas angles: world angle a -> canvas angle -a
+  const a = -sunDir;
+  ctx.arc(sx(x), sy(y), r, a - Math.PI/2, a + Math.PI/2);
+  ctx.closePath();
+  ctx.fillStyle = COL.moon; ctx.fill();
+  ctx.restore();
+  circle(x, y, r, null, "rgba(233,236,244,.5)", 1);
+}
+
+// Deterministic completion blip: visible for `dur` days after eventDay.
+// Renders as a double-pulse expanding ring -> scrub-safe by construction.
+function blip(x, y, eventDay, color, baseR, squashY){
+  const age = state.day - eventDay, dur = 3.2;
+  if (age < 0 || age > dur) return;
+  const u = age / dur;                         // 0..1
+  const pulse = 0.5 + 0.5*Math.sin(u*Math.PI*3 - Math.PI/2); // 2 swells
+  const r = baseR * (0.7 + 1.5*u + 0.35*pulse);
+  const alpha = (1 - u) * (0.55 + 0.45*pulse);
+  ctx.save();
+  ctx.translate(sx(x), sy(y));
+  if (squashY) ctx.scale(1, squashY);
+  ctx.beginPath(); ctx.arc(0, 0, r, 0, TAU);
+  ctx.strokeStyle = color; ctx.globalAlpha = alpha;
+  ctx.lineWidth = 3; ctx.shadowColor = color; ctx.shadowBlur = 14;
+  ctx.stroke();
+  ctx.restore();
+}
+
+function starfield(){
+  // deterministic pseudo-random stars (stable across frames)
+  ctx.fillStyle = "#0b0e17"; ctx.fillRect(0, 0, W, H);
+  let seed = 42;
+  const rnd = () => (seed = (seed*16807) % 2147483647) / 2147483647;
+  for (let i = 0; i < 110; i++){
+    const x = rnd()*W, y = rnd()*H, r = rnd()*1.1 + 0.2, a = rnd()*0.5 + 0.15;
+    ctx.globalAlpha = a; ctx.fillStyle = "#cdd6ea";
+    ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+
+// ---------------------------------------------------------------- event chips
+function setTicker(events){
+  const box = document.getElementById("ticker");
+  const active = events.filter(e => state.day >= e.day && state.day <= e.day + 6);
+  const html = active.map(e =>
+    `<div class="chip" style="color:${e.color};border-color:${e.color}55">${e.text}</div>`
+  ).join("");
+  if (box.dataset.h !== html){ box.innerHTML = html; box.dataset.h = html; }
+}
+
+// ================================================================ SYNODIC
+function drawSynodic(){
+  const Re = S*0.315, Rm = S*0.10, pad = 26;
+  const d = state.day;
+  const ea = TAU*d/P.YEAR;
+  const ma = Math.PI + TAU*d/P.SID;
+  const ex = Re*Math.cos(ea), ey = Re*Math.sin(ea);
+  const mLoc = dd => {                     // moon local offset at day dd
+    const m = Math.PI + TAU*dd/P.SID;
+    return [Rm*Math.cos(m), Rm*Math.sin(m)];
+  };
+  const [mx0, my0] = mLoc(d);
+  const mx = ex + mx0, my = ey + my0;
+
+  // Sun + orbits
+  glowDot(0, 0, S*0.030, COL.sunor);
+  circle(0, 0, Re, null, COL.faint, 1.2);
+  circle(ex, ey, Rm, null, COL.faint, 1.2);
+
+  // STAR LINE: diametric, fixed direction (+x), rides with Earth
+  line(ex - Rm - pad, ey, ex + Rm + pad, ey, COL.gold, 2);
+  label("★", ex + Rm + pad + 12, ey, COL.gold, 15);
+  label("to distant star", ex + Rm + pad + 14, ey - 16, COL.gold, 10, "center");
+
+  // SUN LINE: from Earth toward Sun
+  const su = Math.atan2(-ey, -ex);
+  line(ex, ey, ex + (Rm+pad)*Math.cos(su), ey + (Rm+pad)*Math.sin(su), COL.sunor, 2);
+  label("to Sun", ex + (Rm+pad+16)*Math.cos(su), ey + (Rm+pad+16)*Math.sin(su),
+        COL.sunor, 10);
+
+  // Earth + Moon (phase-shaded)
+  circle(ex, ey, S*0.016, COL.earth);
+  moonDot(mx, my, S*0.009, Math.atan2(-my, -mx));
+
+  // completion blips (positions are the moon's ORBIT slot at the event day,
+  // carried along with Earth's current position -> lands ON its line)
+  const events = [];
+  for (let k = 1; k*P.SID <= DAYS_TOTAL; k++)
+    events.push({day:k*P.SID, color:COL.gold,
+                 text:`sidereal ×${k} — ${(k*P.SID).toFixed(2)} d`, loc:mLoc(k*P.SID)});
+  for (let k = 1; k*P.SYN <= DAYS_TOTAL; k++)
+    events.push({day:k*P.SYN, color:COL.sunor,
+                 text:`synodic ×${k} (New Moon) — ${(k*P.SYN).toFixed(2)} d`, loc:mLoc(k*P.SYN)});
+  for (const e of events) blip(ex + e.loc[0], ey + e.loc[1], e.day, e.color, S*0.022);
+  setTicker(events);
+
+  label(`sidereal months: ${Math.floor(d/P.SID)}   synodic months: ${Math.floor(d/P.SYN)}`,
+        0, -H/2 + 24, COL.muted, 12);
+}
+
+// ================================================================ ANOMALISTIC
+function drawAnom(){
+  const a = S*0.30, d = state.day, x = state.exag;
+  const ecc = lerp(REAL.ecc, EXAG.ecc, x);
+  const apsD = 1/lerp(1/REAL.apsD, 1/EXAG.apsD, x);   // lerp the RATE
+  const w = TAU*d/apsD;
+
+  // ellipse (focus at Earth) rotated by apsidal angle w
+  ctx.beginPath();
+  for (let i = 0; i <= 128; i++){
+    const th = TAU*i/128;
+    const r = a*(1-ecc*ecc)/(1+ecc*Math.cos(th));
+    const px = r*Math.cos(th+w), py = r*Math.sin(th+w);
+    i ? ctx.lineTo(sx(px), sy(py)) : ctx.moveTo(sx(px), sy(py));
+  }
+  ctx.strokeStyle = COL.faint; ctx.lineWidth = 1.6; ctx.stroke();
+
+  const rp = a*(1-ecc), ra = a*(1+ecc);
+  const periPos = dd => {
+    const wk = TAU*dd/apsD;
+    return [rp*Math.cos(wk), rp*Math.sin(wk), wk];
+  };
+  const [px, py, wNow] = periPos(d);
+  line(-ra*Math.cos(wNow), -ra*Math.sin(wNow), px, py, COL.faint, 1.2, [5,5]);
+  glowDot(px, py, 5, COL.peri);
+  label("perigee", px*1.28, py*1.28, COL.peri, 11);
+  circle(-ra*Math.cos(wNow), -ra*Math.sin(wNow), 5, COL.apo);
+  label("apogee", -ra*Math.cos(wNow)*1.18, -ra*Math.sin(wNow)*1.18, COL.apo, 11);
+
+  // Moon by Kepler's equation (M measured from the moving perigee)
+  const M = (TAU*d/P.ANOM) % TAU;
+  const E = solveKepler(M, ecc);
+  const r = a*(1-ecc*Math.cos(E));
+  const nu = 2*Math.atan2(Math.sqrt(1+ecc)*Math.sin(E/2),
+                          Math.sqrt(1-ecc)*Math.cos(E/2));
+  const th = nu + wNow;
+  const mx = r*Math.cos(th), my = r*Math.sin(th);
+
+  // trail (last 10 days)
+  ctx.beginPath();
+  for (let t = Math.max(0, d-10); t <= d; t += 0.25){
+    const wk = TAU*t/apsD, Mk = (TAU*t/P.ANOM)%TAU, Ek = solveKepler(Mk, ecc);
+    const rk = a*(1-ecc*Math.cos(Ek));
+    const nk = 2*Math.atan2(Math.sqrt(1+ecc)*Math.sin(Ek/2),
+                            Math.sqrt(1-ecc)*Math.cos(Ek/2));
+    const qx = rk*Math.cos(nk+wk), qy = rk*Math.sin(nk+wk);
+    t === Math.max(0, d-10) ? ctx.moveTo(sx(qx), sy(qy)) : ctx.lineTo(sx(qx), sy(qy));
+  }
+  ctx.strokeStyle = "rgba(139,147,167,.45)"; ctx.lineWidth = 1.3; ctx.stroke();
+
+  circle(0, 0, S*0.020, COL.earth);         // Earth at the focus
+  moonDot(mx, my, S*0.011, 0);              // sunlight from +x
+
+  const events = [];
+  for (let k = 1; k*P.ANOM <= DAYS_TOTAL; k++){
+    const [bx, by] = periPos(k*P.ANOM);
+    events.push({day:k*P.ANOM, color:COL.peri,
+                 text:`perigee return ×${k} — ${(k*P.ANOM).toFixed(2)} d`, bx, by});
+  }
+  for (const e of events) blip(e.bx, e.by, e.day, e.color, S*0.024);
+  setTicker(events);
+
+  label("sunlight →", -W/2 + 66, -H/2 + 24, COL.sunor, 11);
+  label(`anomalistic months: ${Math.floor(d/P.ANOM)}`, 0, -H/2 + 24, COL.muted, 12);
+}
+
+// ================================================================ DRACONIC
+function drawDrac(){
+  const R = S*0.33, d = state.day, x = state.exag;
+  const inc = lerp(REAL.incDeg, EXAG.incDeg, x) * Math.PI/180;
+  const nodD = 1/lerp(1/REAL.nodD, 1/EXAG.nodD, x);
+  const om = -TAU*d/nodD;                     // regressing
+  const u = TAU*d/P.DRAC;
+  const EL = 33*Math.PI/180, se = Math.sin(EL), ce = Math.cos(EL);
+
+  const world = (uu, oo) => {                 // orbit point in 3D
+    const x0 = R*Math.cos(uu), y0 = R*Math.sin(uu)*Math.cos(inc),
+          z0 = R*Math.sin(uu)*Math.sin(inc);
+    return [x0*Math.cos(oo)-y0*Math.sin(oo), x0*Math.sin(oo)+y0*Math.cos(oo), z0];
+  };
+  const proj = p => [p[0], p[1]*se + p[2]*ce]; // world3 -> world2 (y up)
+
+  // orbit samples split by z-sign for depth ordering around the disc
+  const NS = 128, back = [], front = [];
+  for (let i = 0; i <= NS; i++){
+    const p = world(TAU*i/NS, om);
+    (p[2] < 0 ? back : front).push([...proj(p), i]);
+  }
+  const strokePath = (pts, color, lw) => {
+    ctx.beginPath(); let pen = false;
+    for (const q of pts){
+      // break the path where sample indices are non-contiguous
+      if (!pen){ ctx.moveTo(sx(q[0]), sy(q[1])); pen = true; }
+      else ctx.lineTo(sx(q[0]), sy(q[1]));
+    }
+    ctx.strokeStyle = color; ctx.lineWidth = lw; ctx.stroke();
+  };
+  // draw back half (below ecliptic), then disc, then front half
+  strokePath(splitSegs(back), "rgba(120,128,150,.35)", 1.4);
+
+  // translucent ecliptic (Earth's orbital plane)
+  ctx.save();
+  ctx.translate(sx(0), sy(0)); ctx.scale(1, se);
+  ctx.beginPath(); ctx.arc(0, 0, R+S*0.035, 0, TAU);
+  ctx.fillStyle = "rgba(42,133,119,.14)"; ctx.fill();
+  ctx.strokeStyle = "rgba(95,208,181,.35)"; ctx.lineWidth = 1.2; ctx.stroke();
+  ctx.restore();
+  label("ecliptic (Earth's orbital plane)", 0, -(R+S*0.035)*se - 16, "#5fd0b5", 11);
+
+  // node line + markers (regressed by om)
+  const nodePos = (dd, sign) => {
+    const oo = -TAU*dd/nodD;
+    return proj([sign*R*Math.cos(oo), sign*R*Math.sin(oo), 0]);
+  };
+  const nl = proj([ (R+S*0.028)*Math.cos(om),  (R+S*0.028)*Math.sin(om), 0]);
+  const nr = proj([-(R+S*0.028)*Math.cos(om), -(R+S*0.028)*Math.sin(om), 0]);
+  line(nl[0], nl[1], nr[0], nr[1], COL.muted, 1.4, [6,4]);
+  const an = nodePos(d, +1), dn = nodePos(d, -1);
+  glowDot(an[0], an[1], 5, COL.node);  label("☊ ascending", an[0], an[1]-16, COL.node, 11);
+  glowDot(dn[0], dn[1], 5, COL.dnode); label("☋ descending", dn[0], dn[1]-16, COL.dnode, 11);
+
+  strokePath(splitSegs(front), "rgba(200,206,220,.75)", 1.8);
+
+  // Earth, Moon + drop line to the plane
+  circle(0, 0, S*0.020, COL.earth);
+  const mp3 = world(u, om), mp = proj(mp3), mflat = proj([mp3[0], mp3[1], 0]);
+  line(mp[0], mp[1], mflat[0], mflat[1],
+       mp3[2] >= 0 ? "rgba(76,195,138,.7)" : "rgba(240,138,60,.7)", 1.3, [3,3]);
+  circle(mflat[0], mflat[1], 2.2, COL.muted);
+  moonDot(mp[0], mp[1], S*0.011, 0);
+  label(mp3[2] >= 0 ? "above plane" : "below plane",
+        mp[0], mp[1] + (mp3[2] >= 0 ? 20 : -20),
+        mp3[2] >= 0 ? COL.node : COL.dnode, 10);
+
+  const events = [];
+  for (let k = 1; k*P.DRAC <= DAYS_TOTAL; k++){
+    const bp = nodePos(k*P.DRAC, +1);
+    events.push({day:k*P.DRAC, color:COL.node,
+                 text:`ascending node ×${k} — ${(k*P.DRAC).toFixed(2)} d`, bp});
+  }
+  for (const e of events) blip(e.bp[0], e.bp[1], e.day, e.color, S*0.024, se);
+  setTicker(events);
+
+  label(`draconic months: ${Math.floor(d/P.DRAC)}`, 0, -H/2 + 24, COL.muted, 12);
+}
+// group contiguous samples so the split orbit halves don't draw bridging chords
+function splitSegs(pts){
+  // pts carry original index at [2]; insert NaN-breaks by re-ordering draw calls
+  // simple approach: return as-is when contiguous; otherwise rotate so the
+  // largest gap is at the array boundary
+  if (pts.length < 2) return pts;
+  let gapAt = -1, maxGap = 1;
+  for (let i = 1; i < pts.length; i++){
+    const g = pts[i][2] - pts[i-1][2];
+    if (g > maxGap){ maxGap = g; gapAt = i; }
+  }
+  return gapAt < 0 ? pts : pts.slice(gapAt).concat(pts.slice(0, gapAt));
+}
+
+// ---------------------------------------------------------------- explainers
+const EXPLAIN = {
+  synodic: `<h2>Synodic vs Sidereal — same orbit, two finish lines</h2>
+    The <span class="k-gold">gold star line</span> is fixed in space: when the Moon
+    returns to it, one <b>sidereal month</b> is done —
+    <span class="num k-gold">27.32 d</span>. But Earth has meanwhile moved ~27°
+    along its own orbit, so the <span class="k-or">Sun line</span> has rotated.
+    Catching the Sun line again (New Moon → New Moon, the <b>synodic month</b>)
+    takes <span class="num k-or">29.53 d</span>. Watch the blips: gold rings land
+    exactly on the star line, orange rings exactly on the Sun line. The identity
+    behind it: 1/syn = 1/sid − 1/yr. (The <b>tropical month</b> is the sidereal
+    one measured from the equinox — just 7 s shorter.) Sizes here are not to
+    scale; the day counts are exact.`,
+  anom: `<h2>Anomalistic — chasing a moving perigee</h2>
+    The orbit is an ellipse with Earth at one focus. Its long axis is not fixed:
+    the <b>apsidal line precesses prograde</b> (real period 8.85 yr), so the
+    <span class="k-red">perigee</span> runs <i>ahead</i> of the Moon. Perigee →
+    perigee therefore takes <span class="num k-red">27.55 d</span> — longer than
+    the sidereal 27.32 d. Each red blip marks a perigee return; notice the blip
+    itself has rotated forward between months — that rotation <i>is</i> the
+    precession. Slide <b>Geometry</b> toward "real" and both the eccentricity and
+    the precession nearly vanish — which is exactly why this month is so hard to
+    notice by eye, yet it governs supermoons and eclipse durations.`,
+  drac: `<h2>Draconic — the eclipse month</h2>
+    The Moon's orbit is tilted ~5° to the <span class="k-teal">ecliptic</span>
+    and crosses it at two <b>nodes</b>. The node line <b>regresses</b> (real
+    period 18.6 yr) — it drifts backwards to <i>meet</i> the Moon, so
+    <span class="k-grn">ascending node</span> → ascending node takes only
+    <span class="num k-grn">27.21 d</span>: the shortest month of all. Eclipses
+    need a New or Full Moon near a node, and the near-commensurability
+    223 synodic ≈ 242 draconic months is the <b>Saros</b> (18 yr 11⅓ d). Green
+    blips mark node returns — regressed slightly backward each time.`
+};
+
+function refreshExplain(){
+  document.getElementById("explain").innerHTML = EXPLAIN[state.mode];
+  const row = document.getElementById("exagRow");
+  row.style.display = state.mode === "synodic" ? "none" : "";
+}
+
+// ---------------------------------------------------------------- UI + loop
+function setMode(m){
+  state.mode = m;
+  for (const [id, key] of [["tab-synodic","synodic"],["tab-anom","anom"],["tab-drac","drac"]])
+    document.getElementById(id).classList.toggle("active", key === m);
+  refreshExplain();
+}
+function togglePlay(){
+  state.playing = !state.playing;
+  document.getElementById("playBtn").textContent = state.playing ? "Pause" : "Play";
+}
+document.addEventListener("keydown", e => {
+  if (e.code === "Space" && e.target === document.body){ e.preventDefault(); togglePlay(); }
+  if (e.code === "ArrowRight") state.day = Math.min(DAYS_TOTAL, state.day + 1);
+  if (e.code === "ArrowLeft")  state.day = Math.max(0, state.day - 1);
+});
+
+function refreshExagReadout(){
+  const x = state.exag;
+  const el = document.getElementById("exagVal");
+  const hint = document.getElementById("exagHint");
+  if (state.mode === "anom"){
+    const e = lerp(REAL.ecc, EXAG.ecc, x);
+    const pd = 1/lerp(1/REAL.apsD, 1/EXAG.apsD, x);
+    el.textContent = `e=${e.toFixed(3)}`;
+    hint.innerHTML = `<b>real ← → teaching</b> · eccentricity ${e.toFixed(3)}
+      (real 0.055) · apsidal period ${pd.toFixed(0)} d (real 3233 d = 8.85 yr, prograde)`;
+  } else if (state.mode === "drac"){
+    const i = lerp(REAL.incDeg, EXAG.incDeg, x);
+    const pd = 1/lerp(1/REAL.nodD, 1/EXAG.nodD, x);
+    el.textContent = `i=${i.toFixed(1)}°`;
+    hint.innerHTML = `<b>real ← → teaching</b> · inclination ${i.toFixed(2)}°
+      (real 5.15°) · nodal period ${pd.toFixed(0)} d (real 6798 d = 18.6 yr, retrograde)`;
+  }
+}
+
+let lastT = performance.now();
+function loop(now){
+  const dt = Math.min(0.1, (now - lastT)/1000); lastT = now;
+  if (state.playing){
+    state.day += state.speed * dt;
+    if (state.day > DAYS_TOTAL) state.day = 0;
+  }
+  document.getElementById("scrub").value = state.day;
+  document.getElementById("scrubVal").textContent =
+    `${state.day.toFixed(1)} / ${DAYS_TOTAL} d`;
+  document.getElementById("speedVal").textContent = `${state.speed} days / s`;
+  document.getElementById("dayTxt").textContent = `Day ${state.day.toFixed(1)}`;
+  refreshExagReadout();
+
+  starfield();
+  if (state.mode === "synodic") drawSynodic();
+  else if (state.mode === "anom") drawAnom();
+  else drawDrac();
+
+  requestAnimationFrame(loop);
+}
+fitCanvas();
+refreshExplain();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
